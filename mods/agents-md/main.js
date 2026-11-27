@@ -118,6 +118,11 @@ function icon(p, size, color) {
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
 }
 
+
+// Added: drag an agent's row onto a space in the Spaces list to move its tab there (spaces-md
+// does the move). See spaces-md "agent.drag".
+const DRAG_PX = 10, DRAG_CLEAR_MS = 300;
+
 export default class Agents extends View {
   init(_props, cx) {
     if (props()?.sortMenu) return;
@@ -254,6 +259,31 @@ export default class Agents extends View {
     // Idle: a ring; done: a dot.
     if (a.status === "idle") return div().size(7).mx(3).flex_none().rounded(4).border(1.5).border_color(t.idle ?? t.dim);
     return div().size(7).mx(3).flex_none().rounded(4).bg(a.status === "done" ? color : t.dim + "00");
+  }
+
+  // Added: start an agent drag once the pointer has moved DRAG_PX with the button held.
+  dragMove(e, cx) {
+    const src = this.dragSrc;
+    if (!src) return;
+    if (e.pressed_button !== "left") { this.dragSrc = null; if (src.started) this.dragClear(src, cx); cx.notify(); return; }
+    if (src.started || Math.hypot(e.position.x - src.x, e.position.y - src.y) < DRAG_PX) return;
+    const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === src.tab));
+    if (!s) return;
+    src.started = true; src.at = Date.now();
+    setShared("agent.drag", { tab: src.tab, space: s.id, machine: s.machine ?? null, source: "agents", at: src.at,
+      label: src.label, icon: src.program?.icon ?? null, tint: Boolean(src.program?.tint) });
+    cx.notify();
+  }
+
+  dragEnd(cx) {
+    const src = this.dragSrc;
+    this.dragSrc = null;
+    if (src?.started) { this.dragJustEnded = Date.now(); this.dragClear(src, cx); }
+    cx.notify();
+  }
+
+  dragClear(src, cx) {
+    cx.timer.after(DRAG_CLEAR_MS, () => { if (shared("agent.drag")?.at === src.at) setShared("agent.drag", null); });
   }
 
   render(cx) {
@@ -405,7 +435,10 @@ export default class Agents extends View {
           else if (this.hovered === a.address) this.hovered = null;
           cx.notify();
         })
-        .on_click(() => run("pane.focus", { pane: a.pane }))
+        .on_click(() => { if (Date.now() - (this.dragJustEnded ?? 0) > 200) run("pane.focus", { pane: a.pane }); })
+        // Added: press and drag the row onto another space to move the agent there.
+        .on_mouse_down("left", (e) => { if (a.pane) this.dragSrc = { tab: a.tab, x: e.position.x, y: e.position.y, started: false, label: name, program: a.program }; })
+        .when(this.dragSrc?.started && this.dragSrc.tab === a.tab, (el) => el.opacity(0.4))
         .when(Boolean(pic), el => el.child(div().id(`agent-fold-${a.address}`)
           .when(subs.length > 0, el => el.on_click((_e, cx) => {
             cx.stop_propagation();
@@ -498,6 +531,9 @@ export default class Agents extends View {
       )
       // Changed: no » unfold control below the list; the sidebar button sits by the window
       // buttons (chrome-md, or tabs-md on the macOS rail).
-      .child(v_flex().id("ag-list").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode("always").children(rows)), cx);
+      .child(v_flex().id("ag-list").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode("always").children(rows)
+        // Added: agent drags (see DRAG_PX).
+        .on_window_mouse_move((e, cx) => this.dragMove(e, cx))
+        .on_window_mouse_up("left", (_e, cx) => this.dragEnd(cx))), cx);
   }
 }

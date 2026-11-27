@@ -54,5 +54,7 @@ All on 26–27 November 2026, herdr-app 0.1.18. Newest last.
   Cmd+B.
 - Apache License 2.0.
 - Screenshots: `preview.png` (light, shown at herdr.dev/layouts) and `preview-dark.png`.
+- Moving agents: drag a tab, an Agents-list row or a rail icon onto another space (or "New
+  space") to move it there, running and with its name.
 - Extra tab bar buttons: `tabs-md` shows buttons for other mods listed in the user's own
   `tab-buttons.json`, so personal buttons live in their own mod and survive reinstalling the theme.

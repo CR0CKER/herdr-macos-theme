@@ -35,6 +35,19 @@ It's one layout, **macOS**, with a light and a dark theme (`macos-light`, `macos
   - Resting the pointer on a badge or icon shows a card: name, folder, shortcut (⌃1–9),
     agents and status.
 
+## Moving agents between spaces
+
+Drag an agent onto another space in the sidebar to move it there. It keeps running, and its tab
+keeps its name. You can drag:
+
+- a **tab** out of the tab bar (dragging within the bar still reorders tabs);
+- a **row** in the Agents list;
+- an **agent icon** on the folded rail.
+
+While you drag, a copy of the tab follows the pointer, the space under it is outlined in blue, and a **New space** row appears at
+the end of the list: drop there to give the agent a space of its own (named after its folder).
+Moves stay on one machine. A tab split into several panes arrives with its panes side by side.
+
 ## Extra tab bar buttons
 
 Other mods can add buttons to the tab bar, next to Files. List them in your own

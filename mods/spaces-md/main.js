@@ -1,11 +1,11 @@
 // Workspace spaces: stable colored avatars, worktrees under their checkout,
 // grouped by machine when more than one is known. After a space's name, the repo
 // its first terminal is in now, only where unusual: branch, ahead/behind. Agent state lives in the agents list, not here. Click to
-// switch, right-click for its menu, drag to reorder.
+// switch, right-click for its menu, drag to reorder. Added: drop an agent's tab here to move it.
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle, HoverCard } from "gpui-base";
-import { spaces, agents, machines, panes, home, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
+import { spaces, agents, machines, panes, terminals, home, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, notify } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -127,6 +127,28 @@ export function glyph(status) {
 
 export function tone(t, status) {
   return t[status] ?? t.unknown;
+}
+
+// Added: moving an agent to another space by dragging. A drag source (a tab in tabs-md, a row in
+// agents-md, an icon on this rail) puts { tab, space, machine, source, at } in shared "agent.drag"
+// once the pointer has moved DRAG_PX with the button held, and clears it shortly after release.
+// This list is the drop target and does the move (moveTab): the space under the pointer (same
+// machine, not the tab's own) is outlined, and a "New space" row appears at the end.
+const DRAG_PX = 10;
+const DROP_AFTER_MS = 250; // a drop this soon after the drag began is a sloppy click, not a move
+const DRAG_CLEAR_MS = 300; // the source clears the drag this long after release, so the target reads it first
+const dragNow = () => { const d = shared("agent.drag"); return d && typeof d.tab === "string" ? d : null; };
+const canDrop = (d, w) => Boolean(d) && w.id !== d.space && (w.machine ?? null) === (d.machine ?? null);
+const inside = (p, b) => Boolean(p && b) && p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height;
+function dragPayload(tab, source, label = "", program = null) {
+  const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === tab));
+  return s ? { tab, space: s.id, machine: s.machine ?? null, source, at: Date.now(), label, icon: program?.icon ?? null, tint: Boolean(program?.tint) } : null;
+}
+
+// Polls `test` every 50 ms until it's true or `ms` have passed.
+async function until(cx, test, ms = 3000) {
+  for (const end = Date.now() + ms; Date.now() < end; await cx.sleep(50)) if (test()) return true;
+  return test();
 }
 
 export default class Spaces extends View {
@@ -514,6 +536,113 @@ export default class Spaces extends View {
       .when(g.behind > 0, (el) => el.child(div().flex_none().text_color(t.ansi1).child(`\u2193${g.behind}`)));
   }
 
+  // Added: the pointer is over a drop target (a space id or "new"); `bounds` (window pixels) lets a
+  // later move outside it clear the target again.
+  dropHover(target, e, cx) {
+    if (!dragNow()) return;
+    this.dropBounds = e.bounds;
+    if (this.dropOver !== target) { this.dropOver = target; this.shareTarget(target); cx.notify(); }
+  }
+
+  // Added: window-wide pointer moves: start a drag from a rail icon, forget a target the pointer left.
+  dragMove(e, cx) {
+    const src = this.dragSrc;
+    if (src) {
+      if (e.pressed_button !== "left") { this.dragSrc = null; if (src.started) this.dragClear(src, cx); }
+      else if (!src.started && Math.hypot(e.position.x - src.x, e.position.y - src.y) >= DRAG_PX) {
+        const d = dragPayload(src.tab, "rail", src.label, src.program);
+        if (d) { src.started = true; src.at = d.at; setShared("agent.drag", d); cx.notify(); }
+      }
+    }
+    if (this.dropOver && !inside(e.position, this.dropBounds)) { this.dropOver = null; this.shareTarget(null); cx.notify(); }
+  }
+
+  // Added: tells the drag's picture (drawn by the source) where it would land.
+  shareTarget(target) {
+    const name = target === "new" ? "New space" : spaces().find((s) => s.id === target)?.name;
+    setShared("agent.dropTarget", target ? { id: target, name: name ?? "" } : null);
+  }
+
+  dragClear(src, cx) {
+    cx.timer.after(DRAG_CLEAR_MS, () => { if (shared("agent.drag")?.at === src.at) setShared("agent.drag", null); });
+  }
+
+  // Added: release anywhere in the window: drop on the target, if any; end a drag that started here.
+  dragEnd(cx) {
+    const d = dragNow(), target = this.dropOver;
+    this.dropOver = null;
+    if (target) this.shareTarget(null);
+    const src = this.dragSrc;
+    this.dragSrc = null;
+    if (src?.started) { this.dragClear(src, cx); this.dragJustEnded = Date.now(); }
+    if (d && target && Date.now() - d.at >= DROP_AFTER_MS) this.moveTab(d, target, cx);
+    cx.notify();
+  }
+
+  // Added: moves a tab's terminals to another space (or a new one), running, with the tab's name.
+  // Herdr has no move command: terminal.park takes a terminal's pane away (it keeps running), and
+  // terminal.keep gives it a new tab in the shown space, named after the terminal; tab.rename then
+  // puts the name back. A split tab's panes come back side by side, in order.
+  moveTab(d, target, cx) {
+    cx.spawn(async (cx) => {
+      const from = spaces().find((s) => s.id === d.space);
+      const tab = from?.tabs?.find((c) => c.id === d.tab);
+      const moving = panes().filter((p) => p.tab === d.tab && p.terminal).map((p) => ({ terminal: p.terminal, name: p.name }));
+      if (!tab || !moving.length) return;
+      const gone = (m) => !panes().some((p) => p.terminal === m.terminal);
+      const shown = (m) => panes().find((p) => p.terminal === m.terminal);
+      try {
+        for (const m of moving) run("terminal.park", { terminal: m.terminal });
+        if (!(await until(cx, () => moving.every(gone)))) throw new Error("the panes didn't close");
+        let space = target, placeholder = null;
+        if (target === "new") {
+          const known = new Set(spaces().map((s) => s.id));
+          run("space.new", { machine: d.machine ?? "", focus: true });
+          if (!(await until(cx, () => spaces().some((s) => !known.has(s.id) && s.tabs?.length)))) throw new Error("no new space");
+          const made = spaces().find((s) => !known.has(s.id));
+          space = made.id;
+          await until(cx, () => panes().some((p) => p.tab === made.tabs[0].id && p.terminal));
+          placeholder = panes().find((p) => p.tab === made.tabs[0].id && p.terminal)?.terminal ?? null;
+        } else run("space.select", { id: target });
+        if (!(await until(cx, () => spaces().find((s) => s.id === space)?.active))) throw new Error("the space didn't open");
+        const [first, ...rest] = moving;
+        run("terminal.keep", { terminal: first.terminal, place: "tab" });
+        if (!(await until(cx, () => shown(first)?.tab))) throw new Error("the tab didn't appear");
+        const newTab = shown(first).tab;
+        for (const m of rest) {
+          run("pane.focus", { pane: shown(rest[rest.indexOf(m) - 1] ?? first).pane });
+          run("terminal.keep", { terminal: m.terminal, place: "right" });
+          await until(cx, () => shown(m));
+        }
+        run("tab.rename", { id: newTab, name: tab.named ? tab.name : "" });
+        for (const m of moving) if (m.name && shown(m)) run("pane.rename", { pane: shown(m).pane, name: m.name });
+        run("pane.focus", { pane: shown(first).pane });
+        // The new space's own first shell: once it's running, end it (its tab closes), so the space
+        // holds just the moved tab and is named after where that is.
+        if (placeholder && (await until(cx, () => terminals().some((x) => x.address === placeholder && x.state === "live"), 5000))) {
+          await cx.sleep(300);
+          run("terminal.kill", { terminal: placeholder });
+        }
+      } catch (err) {
+        notify({ title: "Couldn't move the agent", body: `${String(err?.message ?? err)}. It's still running: ${moving.map((m) => m.terminal).join(", ")} (hc ls).`, level: "error" });
+      }
+    });
+  }
+
+  // Added: the "New space" drop row, shown only while an agent is dragged.
+  newSpaceDrop(t, collapsed) {
+    const over = this.dropOver === "new";
+    const plus = svg("mods/workspace-chrome/plus.svg").size(collapsed ? 18 : 14).flex_none();
+    const cell = collapsed
+      ? railCell(h_flex().w(RAIL_BIG).h(RAIL_BIG).justify_center().items_center()
+          .child(h_flex().size(BADGE).rounded(Math.round(BADGE / 4)).border(RING).border_dashed().justify_center().items_center()
+            .border_color(over ? t.accent : t.border).text_color(over ? t.accent : t.dim).child(plus)))
+      : h_flex().h(34).px(8).gap(9).flex_none().items_center().rounded(8).border_1().border_dashed()
+          .border_color(over ? t.accent : t.border).text_color(over ? t.accent : t.dim).when(over, (el) => el.bg(t.hover))
+          .child(plus).child("New space");
+    return div().id("space-drop-new").mt(collapsed ? 0 : 4).on_mouse_move((e, cx) => this.dropHover("new", e, cx)).child(cell);
+  }
+
   row({ w, i, g, tree }, t) {
     const on = w.active;
     const fromIndex = this.pressed === null ? -1 : spaces().findIndex(s => s.id === this.pressed);
@@ -530,6 +659,9 @@ export default class Spaces extends View {
       .rounded(8)
       .when(on, (el) => el.bg(t.selected))
       .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+      // Added: an agent dragged over this space: outlined, and dropping moves it here (the hover is
+      // noticed in the one on_mouse_move below: a second one on the same element replaces the first).
+      .when(this.dropOver === w.id, (el) => el.border_1().border_color(t.accent).bg(t.hover))
       .when(this.pressed === w.id && this.over !== w.id, (el) => el.opacity(0.5))
       .when(this.pressed !== null && this.over === w.id && this.pressed !== w.id, (el) => el.child(
         div().absolute().left(0).right(0).h(2).bg(t.accent)
@@ -540,7 +672,8 @@ export default class Spaces extends View {
         this.pressed = w.id;
         this.over = w.id;
       })
-      .on_mouse_move((_e, cx) => {
+      .on_mouse_move((e, cx) => {
+        if (canDrop(dragNow(), w)) this.dropHover(w.id, e, cx); // Added
         const source = spaces().find(s => s.id === this.pressed);
         const over = source && (source.machine ?? null) === (w.machine ?? null) ? w.id : null;
         if (this.pressed !== null && this.over !== over) {
@@ -580,7 +713,7 @@ export default class Spaces extends View {
     // The selected space gets a ring around its badge, with a small gap (no grey underlay);
     // the others reserve the same space so nothing shifts. Hover shows a faint ring.
     const ringed = h_flex().p(RING_GAP).border(RING).rounded(Math.round(BADGE / 4) + RING_GAP + RING)
-      .border_color(w.active ? (t.idle ?? t.dim) : t.chrome) // mid-dark grey ring: #8e8e93 (dark mode #98989d)
+      .border_color(this.dropOver === w.id ? t.accent : w.active ? (t.idle ?? t.dim) : t.chrome) // mid-dark grey ring: #8e8e93 (dark mode #98989d); Added: accent while an agent is dragged over it
       .when(!w.active, (el) => el.hover((s) => s.border_color(t.input)))
       .child(this.badge(w, t, BADGE));
     const head = h_flex()
@@ -591,6 +724,7 @@ export default class Spaces extends View {
       .justify_center()
       .items_center()
       .on_click((_e, cx) => { run("space.select", { id: w.id }); this.quietCard(`space-card-${w.id}`, cx); })
+      .on_mouse_move((e, cx) => { if (canDrop(dragNow(), w)) this.dropHover(w.id, e, cx); }) // Added: drop target
       .child(ringed)
       .when(attention, (el) => el.child(
         div().absolute().top(3).right(3).size(14).rounded(7).border_2().border_color(t.chrome).bg(tone(t, w.status))
@@ -688,7 +822,13 @@ export default class Spaces extends View {
       .justify_center()
       .items_center()
       .hover((s) => s.bg(t.hover))
-      .on_click((_e, cx) => { run("pane.focus", { pane: a.pane }); this.quietCard(`agent-card-${a.address}`, cx); })
+      .on_click((_e, cx) => {
+        if (Date.now() - (this.dragJustEnded ?? 0) < 200) return; // Added: the end of a drag isn't a click
+        run("pane.focus", { pane: a.pane }); this.quietCard(`agent-card-${a.address}`, cx);
+      })
+      // Added: drag the icon onto another space to move the agent's tab there.
+      .on_mouse_down("left", (e) => { this.dragSrc = { tab: a.tab, x: e.position.x, y: e.position.y, started: false, label: agentName(a), program: a.program }; })
+      .when(this.dragSrc?.started && this.dragSrc.tab === a.tab, (el) => el.opacity(0.4))
       .child(programIcon(a.program, AGENT_ICON, t.foreground) ?? div().text_color(t.muted).child(String(agentName(a))[0] ?? "?"))
       .child(h_flex().absolute().bottom(0).right(0).min_w(15).h(15).px(1).rounded(8).bg(t.chrome)
         .items_center().justify_center().child(this.agentStatus(a, t)));
@@ -730,6 +870,10 @@ export default class Spaces extends View {
     }
     if (changed) setShared("space.colors", kept);
     const list = this.grouped(t, collapsed);
+    // Added: while an agent is dragged, a "New space" drop row ends the list.
+    const drag = dragNow();
+    if (!drag) this.dropOver = null;
+    if (drag) list.push(this.newSpaceDrop(t, collapsed));
     // Bring the active space into view when it, or its place in the list, changes; a row already in view stays put.
     const active = sp.find(p => p.active)?.id;
     if (active !== this.revealed || this.activeAt !== this.revealedAt) {
@@ -747,6 +891,9 @@ export default class Spaces extends View {
         // A block above (another mod's) growing, or the window resizing, shrinks this list and can push the active space out.
         .on_size_change((_size, cx) => { if (this.activeAt >= 0) { this.scroll.scroll_to_item(this.activeAt); cx.notify(); } })
         .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
+        // Added: agent drags (see moveTab).
+        .on_window_mouse_move((e, cx) => this.dragMove(e, cx))
+        .on_window_mouse_up("left", (_e, cx) => this.dragEnd(cx))
         .children(list)), cx);
   }
 }
