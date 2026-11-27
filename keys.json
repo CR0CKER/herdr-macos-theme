@@ -1,0 +1,6 @@
+{
+  "layout:macos": {
+    "cmd-b": "tabs-md.sidebar",
+    "cmd-shift-b": "layout.toggle:sidebar"
+  }
+}

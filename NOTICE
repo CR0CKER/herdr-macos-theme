@@ -1,0 +1,19 @@
+macOS theme for Herdr
+
+Licensed under the Apache License, Version 2.0 (LICENSE).
+
+The mods in mods/ (tabs-md, status-md, chrome-md, spaces-md, agents-md) are modified copies
+of mods shipped with the Herdr app (tabs, workspace-status, workspace-chrome, spaces, agents),
+version 0.1.18. Herdr's app is open source under the Apache License 2.0; see https://herdr.dev and
+https://github.com/herdrdev/herdr-app. The unmodified originals are kept in upstream/herdr-0.1.18/
+for comparison. Changes are marked in the code with "// Added:" or "// Changed:" comments.
+
+mods/chrome-md/*.svg are Herdr's shipped copies of Lucide icons (https://lucide.dev, ISC).
+mods/spaces-md/icons/claude.svg is Herdr's shipped Claude Code program icon with its size
+attributes changed; Claude is a trademark of Anthropic.
+
+reference/sable/ holds the "macOS" themes made for the Sable Matrix client
+(https://github.com/CR0CKER/sable-theme-macos, MIT), which this design is based on.
+
+macOS, SF Pro and Menlo are trademarks of Apple Inc. This theme is not affiliated with or
+endorsed by Apple.
