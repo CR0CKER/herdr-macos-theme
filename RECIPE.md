@@ -74,11 +74,14 @@ agents under them.
   ".SystemUIFont"`, `font: "Menlo"`, `titlebar: "none"`, `traffic_lights: [12, 16]`, preview
   `layouts/macos.svg`.
 - `themes/macos-light.json`, `themes/macos-dark.json`: Sable macOS tokens blended to solid hex.
-- Five clones of Herdr's mods, every change marked `// Added:` or `// Changed:`:
+- Six clones of Herdr's mods, every change marked `// Added:` or `// Changed:`:
   `tabs-md` (tabs; the `tabs-md.sidebar` command received with `nextCommand()`; extra buttons
   for other mods listed in the user's `tab-buttons.json`, reread on change with `watchFolder`), `status-md`
   (workspace-status), `chrome-md` (workspace-chrome: header, footer, the slide), `spaces-md`
-  (spaces: the whole rail, `HoverCard`), `agents-md` (agents: draws nothing on the rail).
+  (spaces: the whole rail, `HoverCard`), `agents-md` (agents: draws nothing on the rail), `toast-md` (toast; the layout's root
+  `"toast": "toast-md"`: with the user's `notifications.json` `{"system": true}` it posts with
+  `exec` of terminal-notifier, else `osascript` `display notification`, Linux `notify-send`, and
+  closes itself at once).
 - Uses Herdr's shipped `pane`, `files` and `changes` mods and a few of `workspace-chrome`'s icons.
 - Commands: `layout.resize`, `layout.show`/`layout.hide` (`agents`), `layout.toggle:sidebar`,
   `space.select`, `pane.focus`; for moving agents `terminal.park`, `terminal.keep`, `space.new`,
@@ -91,6 +94,15 @@ agents under them.
 
 ## Watch out
 
+- Notifications: `tools/herdr-notifications.sh` copies terminal-notifier.app to
+  `~/Applications/Herdr Notifications.app` with Herdr's `Herdr.icns`, name "Herdr" and its own id
+  (`local.herdr.notifications`), re-signs it ad hoc, registers and starts it; `toast-md` prefers it.
+  Homebrew's terminal-notifier fails with "Notifications are not allowed for this
+  application" (exit 3, no prompt, not in Settings) until it's registered as an app: copied to
+  `~/Applications`, `lsregister -f`, started once with `open`; then it shows in System Settings >
+  Notifications. `toast-md` falls back to AppleScript per notification (it tries terminal-notifier
+  each time, so allowing it takes effect at once). A toast that may go to the system draws nothing
+  until it has decided, so nothing flashes; one that posted closes itself.
 - Moving agents: Herdr has no move command and no cross-mod drag payload. Sources put
   `{tab, space, machine, source, at}` in shared `agent.drag` (cleared 300ms after release, so the
   target reads it first); `spaces-md` highlights via `on_mouse_move` (it fires during a press that
@@ -123,7 +135,7 @@ agents under them.
 
 ## Done when
 
-- `herdr-app check` passes for each of the five mods and `herdr-app status` shows no errors.
+- `herdr-app check` passes for each of the six mods and `herdr-app status` shows no errors.
 - In light mode the sidebar samples `#ebebed` and the card `#ffffff`; dark switches with the system.
 - The sidebar header shows only the traffic lights, the sidebar button and search.
 - Cmd+B folds to the rail (108px on macOS) with badges and agents under them, and back to the

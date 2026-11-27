@@ -203,5 +203,6 @@
   },
   "ui_font": ".SystemUIFont",
   "font": "Menlo",
-  "preview": "layouts/macos.svg"
+  "preview": "layouts/macos.svg",
+  "toast": "toast-md"
 }
