@@ -27,7 +27,7 @@ agents under them.
   wide as the badge whose left edge is a 2px line in the space's colour; the active agent is a 4px
   bar on that line. Each icon's status sits on its corner (spinner, pulsing "!", ring, dot).
   10px above each badge, 14px below its agents. Footer: Settings and Add machine as icons.
-- **Card (right, 4px from the window edge, radius 12, 1px border):**
+- **Card (right, 4px from the window edge, radius 12, 1px border in `selected`):**
   - Tab bar, 42px, no fill of its own (the card's corners show): tabs with program icon, title,
     status; + and the Files / Changes buttons at the end.
   - Terminals 6px inside the card. A single pane has no frame; split panes get an 8px-radius
@@ -74,7 +74,7 @@ agents under them.
 - `layouts/macos.json`, Herdr's `main` layout (0.1.18) restructured: `root` row → `sidebar`
   column (`brand` block `chrome-md`, `sidebar-lists` with `spaces` `spaces-md` and `agents`
   `agents-md`, `sidebar-footer` `chrome-md` with `props.footer`) and `work-frame` column
-  (padding 4) holding `work` (the card: `surface`, radius 12, border) with `tabs` (`tabs-md`,
+  (padding 4) holding `work` (the card: `surface`, radius 12, border `selected`) with `tabs` (`tabs-md`,
   `props.surface`) and `work-body`, then `status` (`status-md`, `props.bare`). `ui_font:
   ".SystemUIFont"`, `font: "Menlo"`, `titlebar: "none"`, `traffic_lights: [12, 16]`, preview
   `layouts/macos.svg`.

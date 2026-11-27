@@ -168,7 +168,7 @@
           "radius": 12,
           "border": {
             "width": 1,
-            "color": "border"
+            "color": "selected"
           }
         },
         {
