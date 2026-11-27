@@ -54,6 +54,11 @@ agents under them.
   out and back in. Resting on a badge or icon for 600ms shows a card to its right (250px, 10px
   corners): name, folder, ⌃1–9 shortcut, the space's agents with their status; a click hides that
   card until the pointer leaves.
+- **Files panel:** the tab bar's Files / Changes buttons slide the `panel` column from 1px to its
+  width (shared `panel.width`) over 180ms in 12 `layout.resize` steps, and back before
+  `layout.hide`; switching Files/Changes while open is instant. The header has a sort control
+  ("Name ▾", click cycles Name → Modified → Created; dates newest first, folders mixed, a short date
+  on each row) and an eye button that hides dot files; both kept in the mod's `localStorage`.
 - **Reordering tabs:** a tab pressed and moved ≥10px within the bar dims to 40%, a copy follows the
   pointer, and a 2px accent line (3px inset top and bottom) sits in the gap on the left or right of
   the tab under the pointer, by which half it's over; release moves it there (`tab.move`).
@@ -74,14 +79,16 @@ agents under them.
   ".SystemUIFont"`, `font: "Menlo"`, `titlebar: "none"`, `traffic_lights: [12, 16]`, preview
   `layouts/macos.svg`.
 - `themes/macos-light.json`, `themes/macos-dark.json`: Sable macOS tokens blended to solid hex.
-- Six clones of Herdr's mods, every change marked `// Added:` or `// Changed:`:
+- Seven clones of Herdr's mods, every change marked `// Added:` or `// Changed:`:
   `tabs-md` (tabs; the `tabs-md.sidebar` command received with `nextCommand()`; extra buttons
   for other mods listed in the user's `tab-buttons.json`, reread on change with `watchFolder`), `status-md`
   (workspace-status), `chrome-md` (workspace-chrome: header, footer, the slide), `spaces-md`
   (spaces: the whole rail, `HoverCard`), `agents-md` (agents: draws nothing on the rail), `toast-md` (toast; the layout's root
   `"toast": "toast-md"`: with the user's `notifications.json` `{"system": true}` it posts with
   `exec` of terminal-notifier, else `osascript` `display notification`, Linux `notify-send`, and
-  closes itself at once).
+  closes itself at once), `files-md` (files: sort by name / modified / created via one
+  `find -exec stat` per folder, dot files hideable, keeps its open width while the panel slides).
+  The layout's `panel` column has `min: 1` (Herdr's 280 stopped the slide), and its Files block uses `files-md`.
 - Uses Herdr's shipped `pane`, `files` and `changes` mods and a few of `workspace-chrome`'s icons.
 - Commands: `layout.resize`, `layout.show`/`layout.hide` (`agents`), `layout.toggle:sidebar`,
   `space.select`, `pane.focus`; for moving agents `terminal.park`, `terminal.keep`, `space.new`,
@@ -93,6 +100,12 @@ agents under them.
   `layout.toggle:sidebar`.
 
 ## Watch out
+
+- The side panel's slide: Herdr's `panel` column has `min: 280`, which silently clamps
+  `layout.resize` (`layout()` still reports the requested px), so a close shrank to 280 and then
+  vanished. The theme sets `min: 1`. Keep the list's element structure the same during and outside
+  the slide (switching it mid-slide rebuilt the list), and `on_size_change` doesn't fire for a block
+  that only appears through a slide: use the panel's open px.
 
 - Notifications: `tools/herdr-notifications.sh` copies terminal-notifier.app to
   `~/Applications/Herdr Notifications.app` with Herdr's `Herdr.icns`, name "Herdr" and its own id
@@ -135,7 +148,7 @@ agents under them.
 
 ## Done when
 
-- `herdr-app check` passes for each of the six mods and `herdr-app status` shows no errors.
+- `herdr-app check` passes for each of the seven mods and `herdr-app status` shows no errors.
 - In light mode the sidebar samples `#ebebed` and the card `#ffffff`; dark switches with the system.
 - The sidebar header shows only the traffic lights, the sidebar button and search.
 - Cmd+B folds to the rail (108px on macOS) with badges and agents under them, and back to the

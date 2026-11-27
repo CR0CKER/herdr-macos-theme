@@ -60,6 +60,36 @@ function toggleSidebar(cx) {
   }
 }
 
+// Added: the side panel (Files, Changes) slides open and shut the same way: from a sliver to the
+// width it had (shared "panel.width"), and back, then hidden. Shared "panel.slide" {id, open, until}
+// lets files-md keep its open layout meanwhile, and a click mid-slide counts from that slide's width.
+const PANEL_MIN = 1; // a sliver this thin, so hiding it at the end of a close shows no jump
+function slidePanel(show, child, cx) {
+  const node = find(layout(), "panel");
+  if (!node) return;
+  const slide = shared("panel.slide");
+  const mid = slide && typeof slide.until === "number" && Date.now() < slide.until;
+  const px = node.size?.px ?? 368;
+  const open = mid ? slide.open : (node.hidden ? (shared("panel.width") ?? px) : px);
+  if (!mid && !node.hidden) setShared("panel.width", px);
+  if (child) run("layout.select", { stack: "panel-body", child });
+  const from = node.hidden ? PANEL_MIN : px, to = show ? open : PANEL_MIN;
+  const id = `${Date.now()}-${Math.random()}`;
+  setShared("panel.slide", { id, open, show, until: Date.now() + SLIDE_MS + 60 });
+  if (node.hidden) { run("layout.resize", { id: "panel", px: from }); run("layout.show", { id: "panel" }); }
+  for (let i = 1; i <= SLIDE_STEPS; i++) {
+    const p = i / SLIDE_STEPS, eased = 1 - Math.pow(1 - p, 3);
+    const step = Math.round(from + (to - from) * eased);
+    cx.timer.after(Math.round(SLIDE_MS * p), () => {
+      if (shared("panel.slide")?.id !== id) return; // a newer click took over
+      run("layout.resize", { id: "panel", px: step });
+      if (i < SLIDE_STEPS) return;
+      if (!show) { run("layout.hide", { id: "panel" }); run("layout.resize", { id: "panel", px: open }); }
+      setShared("panel.slide", null);
+    });
+  }
+}
+
 // Same as the agents mod: drops a status glyph, keeps a leading bracket or quote.
 const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}\p{Ps}\p{Pi}]+/u, "").replace(/^\[ [!.] \] /, "").trim();
 
@@ -285,9 +315,14 @@ export default class Tabs extends View {
       return h_flex().id(`panel-${id}`).h(26).px(8).gap(5).flex_none().items_center().rounded(6)
         .text_size(12).bg(on ? t.selected : bar).text_color(on ? t.foreground : t.muted)
         .hover(s => s.bg(t.hover)).on_mouse_down("left", stop)
-        .on_click(() => {
-          if (on) run("layout.hide", { id: "panel" });
-          else { run("layout.select", { stack: "panel-body", child: id }); run("layout.show", { id: "panel" }); }
+        // Changed: the panel slides open and shut (slidePanel); switching between Files and Changes
+        // while it's open stays instant.
+        .on_click((_e, cx) => {
+          const slide = shared("panel.slide");
+          const closing = slide && !slide.show && Date.now() < slide.until;
+          if (on && !closing) slidePanel(false, null, cx);
+          else if (panel && !panel.hidden && !closing) run("layout.select", { stack: "panel-body", child: id });
+          else slidePanel(true, id, cx);
         }).child(svg(icon).size(14)).child(label);
     };
     // On the card (props.surface) the bar has no fill of its own, so the card's rounded corners show.
