@@ -101,6 +101,13 @@ agents under them.
 
 ## Watch out
 
+- Scrollbars: `overflow_y_scrollbar` paints a flat, square-ended bar whose look can't be changed
+  (a placed `Scrollbar` only takes the size of its box). The Spaces and Agents lists and the Files
+  tree scroll bare (`overflow_y_scroll` + `ScrollHandle`) and draw their own thumb from
+  `offset()` / `content_size()` / `viewport_size()`: 5px, rounded, text colour at 45%, shown on
+  `on_scroll_wheel`, faded out 0.8s later. Keep its opacity `transition` on in every frame (quick
+  in, slow out); added only in the hiding frame it didn't animate.
+
 - The side panel's slide: Herdr's `panel` column has `min: 280`, which silently clamps
   `layout.resize` (`layout()` still reports the requested px), so a close shrank to 280 and then
   vanished. The theme sets `min: 1`. Keep the list's element structure the same during and outside

@@ -1,7 +1,33 @@
 // Agents in grouped or priority views; parents take their most urgent sub-agent's place.
 
 import { View, div, image, svg } from "gpui-kit";
-import { v_flex, h_flex } from "gpui-base";
+import { v_flex, h_flex, ScrollHandle } from "gpui-base";
+
+// Added: a macOS-style overlay scroller. Herdr's built-in bar is a flat, square-ended grey slab that
+// can't be styled, so the list scrolls bare (overflow_y_scroll + a ScrollHandle) and this draws the
+// thumb over its right edge as macOS's overlay scroller does: 5px, fully rounded, the text colour
+// at 45%, shown at once while scrolling and fading out SCROLLER.holdMs after the last scroll. The
+// opacity transition is always on (Herdr animates only changes made while one is in place): quick
+// in, slow out. It has no handlers, so clicks pass through.
+const SCROLLER = { width: 5, inset: 2, min: 28, holdMs: 800,
+  fadeIn: { duration: 80, easing: "ease-out" }, fadeOut: { duration: 300, easing: "ease-in-out" } };
+function scrollerTouch(view, key, cx) {
+  (view.scrolledAt ??= {})[key] = Date.now();
+  cx.timer.after(16, (cx) => cx.notify()); // the new offset is there on the next frame
+  cx.timer.after(SCROLLER.holdMs + 20, (cx) => cx.notify()); // then fade
+}
+function scroller(view, key, handle, t) {
+  let off, content, viewport;
+  try { off = handle.offset().y; content = handle.content_size().height; viewport = handle.viewport_size().height; } catch { return null; }
+  if (!(viewport > 0) || !(content > viewport + 1)) return null;
+  const track = viewport - SCROLLER.inset * 2;
+  const h = Math.max(SCROLLER.min, (track * viewport) / content);
+  const top = SCROLLER.inset + (track - h) * Math.min(1, Math.max(0, off / (content - viewport)));
+  const shown = Date.now() - (view.scrolledAt?.[key] ?? 0) < SCROLLER.holdMs;
+  return div().id(`scroller-${key}`).absolute().right(SCROLLER.inset).top(top).w(SCROLLER.width).h(h).rounded(SCROLLER.width / 2)
+    .bg(`${String(t.foreground ?? "#000000").slice(0, 7)}73`)
+    .opacity(shown ? 1 : 0).transition("opacity", shown ? SCROLLER.fadeIn : SCROLLER.fadeOut);
+}
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout } from "herdr";
 
 function find(node, id) {
@@ -126,6 +152,7 @@ const DRAG_PX = 10, DRAG_CLEAR_MS = 300;
 export default class Agents extends View {
   init(_props, cx) {
     if (props()?.sortMenu) return;
+    this.scroll = ScrollHandle.new(); // Added: for the macOS-style scroller
     this.folded = new Set();
     // Each agent's last state and when it changed (ms), kept across restarts.
     try { this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}"); } catch { this.changed = {}; }
@@ -531,9 +558,12 @@ export default class Agents extends View {
       )
       // Changed: no » unfold control below the list; the sidebar button sits by the window
       // buttons (chrome-md, or tabs-md on the macOS rail).
-      .child(v_flex().id("ag-list").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode("always").children(rows)
+      // Changed: the list scrolls bare; the macOS-style scroller is drawn over it (see scroller).
+      .child(div().relative().flex_1().min_h(0).child(v_flex().id("ag-list").size_full().px(collapsed ? 0 : 8).overflow_y_scroll().track_scroll(this.scroll)
+        .on_scroll_wheel((_e, cx) => scrollerTouch(this, "agents", cx)).children(rows)
         // Added: agent drags (see DRAG_PX).
         .on_window_mouse_move((e, cx) => this.dragMove(e, cx))
-        .on_window_mouse_up("left", (_e, cx) => this.dragEnd(cx))), cx);
+        .on_window_mouse_up("left", (_e, cx) => this.dragEnd(cx)))
+        .child(scroller(this, "agents", this.scroll, t) ?? div())), cx);
   }
 }
