@@ -64,7 +64,8 @@ agents under them.
   `layouts/macos.svg`.
 - `themes/macos-light.json`, `themes/macos-dark.json`: Sable macOS tokens blended to solid hex.
 - Five clones of Herdr's mods, every change marked `// Added:` or `// Changed:`:
-  `tabs-md` (tabs; the `tabs-md.sidebar` command received with `nextCommand()`), `status-md`
+  `tabs-md` (tabs; the `tabs-md.sidebar` command received with `nextCommand()`; extra buttons
+  for other mods listed in the user's `tab-buttons.json`, reread on change with `watchFolder`), `status-md`
   (workspace-status), `chrome-md` (workspace-chrome: header, footer, the slide), `spaces-md`
   (spaces: the whole rail, `HoverCard`), `agents-md` (agents: draws nothing on the rail).
 - Uses Herdr's shipped `pane`, `files` and `changes` mods and a few of `workspace-chrome`'s icons.

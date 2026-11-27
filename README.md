@@ -32,6 +32,21 @@ It's one layout, **macOS**, with a light and a dark theme (`macos-light`, `macos
   - Resting the pointer on a badge or icon shows a card: name, folder, shortcut (⌃1–9),
     agents and status.
 
+## Extra tab bar buttons
+
+Other mods can add buttons to the tab bar, next to Files. List them in your own
+`~/.config/herdr-app/tab-buttons.json` (the installer never touches it, so reinstalling the
+theme keeps your buttons):
+
+```json
+[{ "mod": "my-mod", "label": "Do it", "icon": "mods/my-mod/icon.svg", "tooltip": "What it does" }]
+```
+
+A click opens that mod as an invisible 1×1 window with the focused terminal in its props
+(`terminal`, `pane`, `tab`, `space`, `cwd`); the mod does its job and closes itself with
+`closeOverlay(props().overlay)`. A window doesn't take the keyboard, so focus stays where it was.
+For a shortcut, bind `mod.open:my-mod` in keys.json; the mod then falls back to `focused()`.
+
 ## Install
 
 Requires Herdr 0.1.18 or later (built and tested on herdr-app 0.1.18, herdr-core 0.1.22).

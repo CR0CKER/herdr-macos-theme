@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, ScrollHandle } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, nextCommand, checking, props, setShared } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, nextCommand, checking, props, setShared, focused, appHome, readTextFile, watchFolder } from "herdr";
 
 
 function find(node, id) {
@@ -76,6 +76,26 @@ function label(tab, lead) {
   return (tab.name === prog || !tab.named) && telling ? live : base;
 }
 
+// Added: extra tab bar buttons from other mods, listed in the user's own `tab-buttons.json` in
+// Herdr's config folder (not part of this theme, so reinstalling keeps it):
+//   [{ "mod": "my-mod", "label": "Do it", "icon": "mods/my-mod/icon.svg", "tooltip": "…" }]
+// A click opens that mod as an invisible 1×1 window with props {terminal, pane, tab, space, cwd}
+// of the focused terminal; the mod does its work and closes itself (`closeOverlay(props().overlay)`).
+const BUTTONS_FILE = "tab-buttons.json";
+
+function parseButtons(text) {
+  try {
+    const list = JSON.parse(text ?? "[]");
+    return Array.isArray(list) ? list.filter(b => b && typeof b.mod === "string" && b.mod) : [];
+  } catch { return []; }
+}
+
+function runButton(b) {
+  const f = focused() ?? {};
+  openOverlay({ mod: b.mod, kind: "window", frame: "none", width: 1, height: 1, at: { x: 0, y: 0 },
+    props: { terminal: f.terminal ?? null, pane: f.pane ?? null, tab: f.tab ?? null, space: f.space ?? null, cwd: f.cwd ?? null } });
+}
+
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
@@ -88,6 +108,18 @@ export default class Tabs extends View {
       for (;;) {
         const command = await nextCommand();
         if (command === "sidebar") toggleSidebar(cx);
+      }
+    });
+    // Added: extra buttons (see BUTTONS_FILE); reread when the file changes.
+    this.extraButtons = [];
+    if (cx && !checking()) cx.spawn(async (cx) => {
+      const file = `${appHome()}/${BUTTONS_FILE}`;
+      for (;;) {
+        this.extraButtons = parseButtons(await readTextFile(file).catch(() => null));
+        cx.notify();
+        let batch;
+        do batch = await watchFolder(appHome());
+        while (batch.length && !batch.some(p => p === file || p === appHome() || p === `${appHome()}/`));
       }
     });
   }
@@ -217,6 +249,13 @@ export default class Tabs extends View {
       .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
       .when(enabled.includes("files"), el => el.child(panelButton("files", "Files", "mods/files/file.svg")))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
+      .children((this.extraButtons ?? []).map((b, i) => h_flex().id(`extra-${i}-${b.mod}`).h(26).px(8).gap(5).flex_none().items_center().rounded(6)
+        .text_size(12).bg(bar).text_color(t.muted)
+        .hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop)
+        .on_click(() => runButton(b))
+        .when(typeof b.tooltip === "string" && b.tooltip, el => el.tooltip(b.tooltip))
+        .when(typeof b.icon === "string" && b.icon, el => el.child(svg(b.icon).size(14)))
+        .when(typeof b.label === "string" && b.label, el => el.child(b.label))))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/tabs-md/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/tabs-md/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/tabs-md/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));
