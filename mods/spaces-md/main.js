@@ -5,6 +5,32 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, ScrollHandle, HoverCard } from "gpui-base";
+
+// Added: a macOS-style overlay scroller. Herdr's built-in bar is a flat, square-ended grey slab that
+// can't be styled, so the list scrolls bare (overflow_y_scroll + a ScrollHandle) and this draws the
+// thumb over its right edge as macOS's overlay scroller does: 5px, fully rounded, the text colour
+// at 45%, shown at once while scrolling and fading out SCROLLER.holdMs after the last scroll. The
+// opacity transition is always on (Herdr animates only changes made while one is in place): quick
+// in, slow out. It has no handlers, so clicks pass through.
+const SCROLLER = { width: 5, inset: 2, min: 28, holdMs: 800,
+  fadeIn: { duration: 80, easing: "ease-out" }, fadeOut: { duration: 300, easing: "ease-in-out" } };
+function scrollerTouch(view, key, cx) {
+  (view.scrolledAt ??= {})[key] = Date.now();
+  cx.timer.after(16, (cx) => cx.notify()); // the new offset is there on the next frame
+  cx.timer.after(SCROLLER.holdMs + 20, (cx) => cx.notify()); // then fade
+}
+function scroller(view, key, handle, t) {
+  let off, content, viewport;
+  try { off = handle.offset().y; content = handle.content_size().height; viewport = handle.viewport_size().height; } catch { return null; }
+  if (!(viewport > 0) || !(content > viewport + 1)) return null;
+  const track = viewport - SCROLLER.inset * 2;
+  const h = Math.max(SCROLLER.min, (track * viewport) / content);
+  const top = SCROLLER.inset + (track - h) * Math.min(1, Math.max(0, off / (content - viewport)));
+  const shown = Date.now() - (view.scrolledAt?.[key] ?? 0) < SCROLLER.holdMs;
+  return div().id(`scroller-${key}`).absolute().right(SCROLLER.inset).top(top).w(SCROLLER.width).h(h).rounded(SCROLLER.width / 2)
+    .bg(`${String(t.foreground ?? "#000000").slice(0, 7)}73`)
+    .opacity(shown ? 1 : 0).transition("opacity", shown ? SCROLLER.fadeIn : SCROLLER.fadeOut);
+}
 import { spaces, agents, machines, panes, terminals, home, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout, notify } from "herdr";
 
 function find(node, id) {
@@ -887,13 +913,16 @@ export default class Spaces extends View {
         .when(!collapsed, el => el.child("Spaces"))
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
-      .child(v_flex().flex_1().min_h(0).px(collapsed ? 0 : 8).pb(14).overflow_y_scrollbar().mode("always").track_scroll(this.scroll)
+      // Changed: the list scrolls bare; the macOS-style scroller is drawn over it (see scroller).
+      .child(div().relative().flex_1().min_h(0).child(v_flex().id("spaces-list").size_full().px(collapsed ? 0 : 8).pb(14).overflow_y_scroll().track_scroll(this.scroll)
+        .on_scroll_wheel((_e, cx) => scrollerTouch(this, "spaces", cx))
         // A block above (another mod's) growing, or the window resizing, shrinks this list and can push the active space out.
         .on_size_change((_size, cx) => { if (this.activeAt >= 0) { this.scroll.scroll_to_item(this.activeAt); cx.notify(); } })
         .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
         // Added: agent drags (see moveTab).
         .on_window_mouse_move((e, cx) => this.dragMove(e, cx))
         .on_window_mouse_up("left", (_e, cx) => this.dragEnd(cx))
-        .children(list)), cx);
+        .children(list))
+        .child(scroller(this, "spaces", this.scroll, t) ?? div())), cx);
   }
 }

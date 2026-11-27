@@ -54,6 +54,8 @@ All on 26–27 November 2026, herdr-app 0.1.18. Newest last.
   Cmd+B.
 - Apache License 2.0.
 - Screenshots: `preview.png` (light, shown at herdr.dev/layouts) and `preview-dark.png`.
+- macOS-style scrollers in the Spaces and Agents lists and the Files tree: a 5px rounded overlay
+  thumb shown while scrolling, fading out; the tab strip's bar shows only while scrolling.
 - Files panel: slides open and shut from the tab bar; sort by name, modified or created; hide dot
   files (`files-md`). The panel's minimum width is 1px so the slide can finish.
 - Notifications can go to macOS Notification Center (opt-in, `notifications.json`), with
