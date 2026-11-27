@@ -54,6 +54,11 @@ agents under them.
   out and back in. Resting on a badge or icon for 600ms shows a card to its right (250px, 10px
   corners): name, folder, ⌃1–9 shortcut, the space's agents with their status; a click hides that
   card until the pointer leaves.
+- **Moving agents:** press a tab and drag it out of the tab bar (inside the bar it reorders), or
+  drag an Agents-list row or a rail icon, ≥10px; a drop within 250ms of the drag starting is ignored (a sloppy click). The dragged item dims to 40%; a space under the
+  pointer (same machine, not the agent's own) gets a 1px accent outline (rail: an accent ring),
+  and a dashed "New space" row ends the Spaces list. Dropping moves the tab there, running, with
+  its name; the target space is shown afterwards. A split tab's panes arrive side by side.
 
 ## Built from
 
@@ -72,14 +77,26 @@ agents under them.
   (spaces: the whole rail, `HoverCard`), `agents-md` (agents: draws nothing on the rail).
 - Uses Herdr's shipped `pane`, `files` and `changes` mods and a few of `workspace-chrome`'s icons.
 - Commands: `layout.resize`, `layout.show`/`layout.hide` (`agents`), `layout.toggle:sidebar`,
-  `space.select`, `pane.focus`; shared keys `sidebar.width`, `sidebar.slide`,
-  `sidebar.collapsed`, `space.colors`.
+  `space.select`, `pane.focus`; for moving agents `terminal.park`, `terminal.keep`, `space.new`,
+  `tab.rename`, `pane.rename`, `terminal.kill` (the new space's own first shell); shared keys `sidebar.width`, `sidebar.slide`,
+  `sidebar.collapsed`, `space.colors`, `agent.drag`.
 - Programs: as Herdr's own spaces mod, `spaces-md` runs `git` (branch, ahead/behind) and `hc`
   (machines), and watches each repo's git folder. Nothing reaches the network.
 - `keys.json`: `layout:macos` → `cmd-b`: `tabs-md.sidebar`, `cmd-shift-b`:
   `layout.toggle:sidebar`.
 
 ## Watch out
+
+- Moving agents: Herdr has no move command and no cross-mod drag payload. Sources put
+  `{tab, space, machine, source, at}` in shared `agent.drag` (cleared 300ms after release, so the
+  target reads it first); `spaces-md` highlights via `on_mouse_move` (it fires during a press that
+  began in another mod) and drops in `on_window_mouse_up`. The move is `terminal.park` per terminal,
+  wait until `panes()` drops them, `space.select` (or `space.new` and end its first shell once
+  `live`), `terminal.keep {place:"tab"}` (the tab comes out named after the terminal), then
+  `tab.rename` back (`""` if it was unnamed). `run()` returns nothing: find new ids in `panes()`.
+  Labels alone (`hc label … herdr.space=…`) don't move a terminal Herdr already shows.
+- An element keeps only its last `on_mouse_move`: the space row's drop hover lives inside its
+  reorder handler; a second handler silently replaced the first, so no space ever became a target.
 
 - Never use a `cx` captured in `render` inside an event handler; a fold timer started with one
   never fired. Use the handler's own.
@@ -104,3 +121,6 @@ agents under them.
 - Cmd+B folds to the rail (108px on macOS) with badges and agents under them, and back to the
   width it had; the Agents block comes back.
 - Cmd+Shift+B hides the sidebar; switching to another layout gives Cmd+B back to Herdr.
+- Dragging a named tab out of the tab bar onto another space moves it there: same terminal
+  address (`hc get`), still live, same tab name; its old space closes if that was its last tab.
+  Dropping on "New space" leaves a space holding just that tab.

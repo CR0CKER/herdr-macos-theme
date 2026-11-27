@@ -96,6 +96,10 @@ function runButton(b) {
     props: { terminal: f.terminal ?? null, pane: f.pane ?? null, tab: f.tab ?? null, space: f.space ?? null, cwd: f.cwd ?? null } });
 }
 
+// Added: drag a tab out of the bar onto a space in the sidebar to move it there (spaces-md does
+// the move). While the drag stays in the bar it's still a reorder. See spaces-md "agent.drag".
+const DRAG_PX = 10, DRAG_CLEAR_MS = 300;
+
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
@@ -122,6 +126,11 @@ export default class Tabs extends View {
         while (batch.length && !batch.some(p => p === file || p === appHome() || p === `${appHome()}/`));
       }
     });
+  }
+
+  // Added: ends an agent drag shortly after release, so the drop target reads it first.
+  dragClear(src, cx) {
+    cx.timer.after(DRAG_CLEAR_MS, () => { if (shared("agent.drag")?.at === src.at) setShared("agent.drag", null); });
   }
 
   // One tab per wheel notch. A touchpad or smooth-scrolling mouse sends many
@@ -204,8 +213,14 @@ export default class Tabs extends View {
         .when(i <= active, el => el.on_size_change((_size, cx) => { this.scroll.scroll_to_item(active); cx.notify(); }))
         .border(1).border_color(c.active ? t.border : bar).bg(c.active ? t.raised : bar).text_color(c.active ? t.foreground : t.muted)
         .hover(s => s.bg(t.hover))
-        .on_mouse_down("left", (e, cx) => { cx.stop_propagation(); this.pressed = i; if (e.click_count === 2) run("tab.rename", { id: c.id }); })
+        .on_mouse_down("left", (e, cx) => {
+          cx.stop_propagation(); this.pressed = i;
+          this.dragSrc = { tab: c.id, x: e.position.x, y: e.position.y, started: false }; // Added
+          if (e.click_count === 2) run("tab.rename", { id: c.id });
+        })
+        .when(this.dragSrc?.started && this.dragSrc.tab === c.id, (el) => el.opacity(0.4)) // Added: being moved
         .on_mouse_up("left", () => {
+          if (this.dragSrc?.started) return; // Added: an agent drag released over the bar does nothing
           const from = this.pressed; this.pressed = null;
           if (from !== null && from !== i) run("tab.move", { id: shown[from].id, index: space.tabs.findIndex(x => x.id === c.id) + 1 });
           else run("tab.select", { id: c.id });
@@ -238,6 +253,26 @@ export default class Tabs extends View {
     // On the card (props.surface) the bar has no fill of its own, so the card's rounded corners show.
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().when(!props()?.surface, el => el.bg(bar)).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
+      // Added: a tab pressed and dragged out of the bar becomes an agent drag ("agent.drag").
+      .on_window_mouse_move((e, cx) => {
+        const src = this.dragSrc;
+        if (!src) return;
+        if (e.pressed_button !== "left") { this.dragSrc = null; if (src.started) this.dragClear(src, cx); cx.notify(); return; }
+        const y = e.local_position.y, out = y < 0 || y > e.bounds.height;
+        if (!src.started && out && Math.hypot(e.position.x - src.x, e.position.y - src.y) >= DRAG_PX) {
+          const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === src.tab));
+          if (!s) return;
+          src.started = true; src.at = Date.now(); this.pressed = null;
+          setShared("agent.drag", { tab: src.tab, space: s.id, machine: s.machine ?? null, source: "tabs", at: src.at });
+          cx.notify();
+        }
+      })
+      .on_window_mouse_up("left", (_e, cx) => {
+        const src = this.dragSrc;
+        if (!src) return;
+        cx.timer.after(0, (cx) => { if (this.dragSrc === src) this.dragSrc = null; cx.notify(); });
+        if (src.started) this.dragClear(src, cx);
+      })
       .on_scroll_wheel(e => this.wheel(e))
       .when(railed, el => el.child(div().id("sidebar-show").size(28).flex_none().flex().items_center().justify_center().rounded(6)
         .text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop)
