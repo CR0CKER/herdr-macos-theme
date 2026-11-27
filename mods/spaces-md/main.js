@@ -914,7 +914,8 @@ export default class Spaces extends View {
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
       // Changed: the list scrolls bare; the macOS-style scroller is drawn over it (see scroller).
-      .child(div().relative().flex_1().min_h(0).child(v_flex().id("spaces-list").size_full().px(collapsed ? 0 : 8).pb(14).overflow_y_scroll().track_scroll(this.scroll)
+      // No bottom padding in the open sidebar: it made a list that fits scroll by 14px.
+      .child(div().relative().flex_1().min_h(0).child(v_flex().id("spaces-list").size_full().px(collapsed ? 0 : 8).when(collapsed, (el) => el.pb(14)).overflow_y_scroll().track_scroll(this.scroll)
         .on_scroll_wheel((_e, cx) => scrollerTouch(this, "spaces", cx))
         // A block above (another mod's) growing, or the window resizing, shrinks this list and can push the active space out.
         .on_size_change((_size, cx) => { if (this.activeAt >= 0) { this.scroll.scroll_to_item(this.activeAt); cx.notify(); } })
