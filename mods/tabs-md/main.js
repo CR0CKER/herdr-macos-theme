@@ -106,8 +106,8 @@ const DRAG_PX = 10, DRAG_CLEAR_MS = 300;
 // handover (two mods taking turns flashed at their border). It sits just below and right of the
 // pointer, so the pointer stays over the space it's dropped on; "→ Space" once one is targeted.
 const GHOST_ICONS = { "icons/claude.svg": "mods/spaces-md/icons/claude.svg" };
-function dragGhost(t, at) {
-  const d = shared("agent.drag"), target = shared("agent.dropTarget");
+// `d`: what's dragged ({label, icon, tint}); `target`: where it would land, if anywhere.
+function dragGhost(t, at, d, target) {
   if (!d || !at) return null;
   const pic = !d.icon ? null : GHOST_ICONS[d.icon] ? image(GHOST_ICONS[d.icon]).size(14) : d.tint ? svg(d.icon).size(14).text_color(t.muted) : image(d.icon).size(14);
   const pill = h_flex().h(29).px(10).gap(7).items_center().rounded(7).text_size(12.8)
@@ -118,9 +118,17 @@ function dragGhost(t, at) {
   // The Popup element itself is placed at the pointer (it would otherwise sit in the row layout).
   return Popup.new("agent-drag-ghost", div().size(1)).absolute().left(at.x + 14).top(at.y + 12).anchor("top_left").content(pill);
 }
-// Where to draw it: the pointer's spot against this bar while a drag is on, else null.
-function ghostSpot(e) {
-  return shared("agent.drag") && e.pressed_button === "left" ? e.local_position : null;
+// Where to draw it: the pointer's spot against this bar while a drag is on (an agent drag, or
+// `reordering` tabs within this bar), else null.
+function ghostSpot(e, reordering) {
+  return (shared("agent.drag") || reordering) && e.pressed_button === "left" ? e.local_position : null;
+}
+
+// Added: where a tab dropped before or after another lands (tab.move's 1-based index), or null
+// when it stays put. `from`, `to`: 0-based places in the space.
+function reorderIndex(from, to, after) {
+  const place = after ? (from < to ? to : to + 1) : (from < to ? to - 1 : to);
+  return place === from ? null : place + 1;
 }
 
 export default class Tabs extends View {
@@ -231,7 +239,8 @@ export default class Tabs extends View {
       const lead = panes().find(p => p.tab === c.id && p.program?.agent) ?? panes().find(p => p.tab === c.id);
       const program = lead?.program;
       const name = label(c, lead);
-      return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
+      const over = this.overTab?.i === i && this.dragSrc?.reordering && this.dragSrc.tab !== c.id; // Added
+      return h_flex().id(`tab-${c.id}`).relative().h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
         // A rename or status dot on this or an earlier tab can push the active one out.
         .when(i <= active, el => el.on_size_change((_size, cx) => { this.scroll.scroll_to_item(active); cx.notify(); }))
         .border(1).border_color(c.active ? t.border : bar).bg(c.active ? t.raised : bar).text_color(c.active ? t.foreground : t.muted)
@@ -241,9 +250,17 @@ export default class Tabs extends View {
           this.dragSrc = { tab: c.id, x: e.position.x, y: e.position.y, started: false, label: name, program }; // Added
           if (e.click_count === 2) run("tab.rename", { id: c.id });
         })
-        .when(this.dragSrc?.started && this.dragSrc.tab === c.id, (el) => el.opacity(0.4)) // Added: being moved
+        .when((this.dragSrc?.started || this.dragSrc?.reordering) && this.dragSrc.tab === c.id, (el) => el.opacity(0.4)) // Added: being moved
+        // Added: reordering: the tab under the pointer says which side the dragged one lands on.
+        .on_mouse_move((e, cx) => {
+          if (!this.dragSrc?.reordering) return;
+          const after = e.local_position.x > e.bounds.width / 2;
+          if (this.overTab?.i !== i || this.overTab.after !== after) { this.overTab = { i, after }; cx.notify(); }
+        })
+        .when(over, (el) => el.child(div().absolute().top(3).bottom(3).w(2).rounded(1).bg(t.accent)
+          .when(this.overTab.after, (d) => d.right(-3)).when(!this.overTab.after, (d) => d.left(-3))))
         .on_mouse_up("left", () => {
-          if (this.dragSrc?.started) return; // Added: an agent drag released over the bar does nothing
+          if (this.dragSrc?.started || this.dragSrc?.reordering) return; // Added: drags end in on_window_mouse_up
           const from = this.pressed; this.pressed = null;
           if (from !== null && from !== i) run("tab.move", { id: shown[from].id, index: space.tabs.findIndex(x => x.id === c.id) + 1 });
           else run("tab.select", { id: c.id });
@@ -277,15 +294,22 @@ export default class Tabs extends View {
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().when(!props()?.surface, el => el.bg(bar)).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
       .relative() // Added: the drag ghost's spot is placed against the bar
-      .when(Boolean(this.ghostAt && shared("agent.drag")), (el) => el.child(dragGhost(t, this.ghostAt)))
+      .when(Boolean(this.ghostAt && shared("agent.drag")), (el) => el.child(dragGhost(t, this.ghostAt, shared("agent.drag"), shared("agent.dropTarget"))))
+      .when(Boolean(this.ghostAt && !shared("agent.drag") && this.dragSrc?.reordering), (el) => el.child(dragGhost(t, this.ghostAt,
+        { label: this.dragSrc.label, icon: this.dragSrc.program?.icon ?? null, tint: Boolean(this.dragSrc.program?.tint) }, null)))
       // Added: a tab pressed and dragged out of the bar becomes an agent drag ("agent.drag").
       .on_window_mouse_move((e, cx) => {
-        const at = ghostSpot(e); // Added: the drag's picture follows
+        const at = ghostSpot(e, this.dragSrc?.reordering); // Added: the drag's picture follows
         if (at || this.ghostAt) { this.ghostAt = at; cx.notify(); }
         const src = this.dragSrc;
         if (!src) return;
         if (e.pressed_button !== "left") { this.dragSrc = null; if (src.started) this.dragClear(src, cx); cx.notify(); return; }
         const y = e.local_position.y, out = y < 0 || y > e.bounds.height;
+        // Added: within the bar, a press moved DRAG_PX reorders tabs (see reorderIndex).
+        if (!src.started && !out && !src.reordering && Math.hypot(e.position.x - src.x, e.position.y - src.y) >= DRAG_PX) {
+          src.reordering = true; this.overTab = null; cx.notify();
+        }
+        if (!src.started && out && src.reordering) { src.reordering = false; this.overTab = null; cx.notify(); }
         if (!src.started && out && Math.hypot(e.position.x - src.x, e.position.y - src.y) >= DRAG_PX) {
           const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === src.tab));
           if (!s) return;
@@ -301,6 +325,15 @@ export default class Tabs extends View {
         if (!src) return;
         cx.timer.after(0, (cx) => { if (this.dragSrc === src) this.dragSrc = null; cx.notify(); });
         if (src.started) this.dragClear(src, cx);
+        // Added: a reorder within the bar lands before or after the tab last under the pointer.
+        const over = this.overTab;
+        this.overTab = null;
+        if (src.reordering && over && shown[over.i]) {
+          const from = space.tabs.findIndex((x) => x.id === src.tab), to = space.tabs.findIndex((x) => x.id === shown[over.i].id);
+          const index = from < 0 || to < 0 ? null : reorderIndex(from, to, over.after);
+          if (index) run("tab.move", { id: src.tab, index });
+        }
+        this.pressed = null;
       })
       .on_scroll_wheel(e => this.wheel(e))
       .when(railed, el => el.child(div().id("sidebar-show").size(28).flex_none().flex().items_center().justify_center().rounded(6)
