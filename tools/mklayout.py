@@ -34,6 +34,8 @@ def build(base):
         "ui_font": ".SystemUIFont",
         "font": "Menlo",
         "preview": "layouts/macos.svg",
+        # Notifications: toast-md (the shipped toast, plus opt-in Notification Center).
+        "toast": "toast-md",
     })
     sidebar = find(root, "sidebar")
     sidebar["background"] = "chrome"

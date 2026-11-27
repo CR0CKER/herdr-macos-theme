@@ -54,6 +54,8 @@ All on 26–27 November 2026, herdr-app 0.1.18. Newest last.
   Cmd+B.
 - Apache License 2.0.
 - Screenshots: `preview.png` (light, shown at herdr.dev/layouts) and `preview-dark.png`.
+- Notifications can go to macOS Notification Center (opt-in, `notifications.json`), with
+  terminal-notifier or AppleScript; in-app toast otherwise (`toast-md`).
 - Reordering tabs shows where the tab lands: a copy follows the pointer and a blue line marks the
   gap (left or right half of the tab under the pointer).
 - Moving agents: drag a tab, an Agents-list row or a rail icon onto another space (or "New
