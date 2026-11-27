@@ -53,7 +53,10 @@ def build(base):
     status = find(root, "status")
     work["children"] = [c for c in work["children"] if c.get("id") != "status"]
     # A hairline defines all four edges (no drop shadow: Herdr's is a flat band, not a blur).
-    work.update({"background": "surface", "radius": 12, "border": {"width": 1, "color": "border"}})
+    # The card's edge matches Sable's flat card: a hairline 10% black over the window grey, which is
+    # the theme's `selected` grey (#d4d4d5 light; dark #434344, Sable #3e3e40). Inner lines keep
+    # `border`, which is lighter, as Sable's are.
+    work.update({"background": "surface", "radius": 12, "border": {"width": 1, "color": "selected"}})
 
     # Status bar on the grey window under the card, with no fill or top line (status-md, a copy of
     # workspace-status), so it doesn't cut off the card's shadow.
