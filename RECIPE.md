@@ -54,6 +54,9 @@ agents under them.
   out and back in. Resting on a badge or icon for 600ms shows a card to its right (250px, 10px
   corners): name, folder, ⌃1–9 shortcut, the space's agents with their status; a click hides that
   card until the pointer leaves.
+- **Reordering tabs:** a tab pressed and moved ≥10px within the bar dims to 40%, a copy follows the
+  pointer, and a 2px accent line (3px inset top and bottom) sits in the gap on the left or right of
+  the tab under the pointer, by which half it's over; release moves it there (`tab.move`).
 - **Moving agents:** press a tab and drag it out of the tab bar (inside the bar it reorders), or
   drag an Agents-list row or a rail icon, ≥10px; a drop within 250ms of the drag starting is ignored (a sloppy click). The dragged item dims to 40% and a copy of it (icon, name; raised, shadowed, 29px) follows
   the pointer 14px right and 12px below, reading "Name → Space" with an accent border over a target; a space under the

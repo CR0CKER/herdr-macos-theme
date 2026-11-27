@@ -35,6 +35,11 @@ It's one layout, **macOS**, with a light and a dark theme (`macos-light`, `macos
   - Resting the pointer on a badge or icon shows a card: name, folder, shortcut (⌃1–9),
     agents and status.
 
+## Reordering tabs
+
+Drag a tab sideways in the tab bar. A copy follows the pointer and a thin blue line shows where it
+will land: on the left half of a tab it goes before it, on the right half after it.
+
 ## Moving agents between spaces
 
 Drag an agent onto another space in the sidebar to move it there. It keeps running, and its tab
