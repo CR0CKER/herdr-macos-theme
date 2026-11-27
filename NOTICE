@@ -2,14 +2,15 @@ macOS theme for Herdr
 
 Licensed under the Apache License, Version 2.0 (LICENSE).
 
-The mods in mods/ (tabs-md, status-md, chrome-md, spaces-md, agents-md, toast-md) are modified
-copies of mods shipped with the Herdr app (tabs, workspace-status, workspace-chrome, spaces, agents,
-toast),
+The mods in mods/ (tabs-md, status-md, chrome-md, spaces-md, agents-md, toast-md, files-md) are
+modified copies of mods shipped with the Herdr app (tabs, workspace-status, workspace-chrome, spaces,
+agents, toast, files),
 version 0.1.18. Herdr's app is open source under the Apache License 2.0; see https://herdr.dev and
 https://github.com/herdrdev/herdr-app. The unmodified originals are kept in upstream/herdr-0.1.18/
 for comparison. Changes are marked in the code with "// Added:" or "// Changed:" comments.
 
-mods/chrome-md/*.svg are Herdr's shipped copies of Lucide icons (https://lucide.dev, ISC).
+mods/chrome-md/*.svg are Herdr's shipped copies of Lucide icons (https://lucide.dev, ISC);
+mods/files-md/eye.svg and eye-off.svg are Lucide icons too.
 mods/spaces-md/icons/claude.svg is Herdr's shipped Claude Code program icon with its size
 attributes changed; Claude is a trademark of Anthropic.
 

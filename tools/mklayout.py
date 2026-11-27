@@ -39,6 +39,15 @@ def build(base):
     })
     sidebar = find(root, "sidebar")
     sidebar["background"] = "chrome"
+    # The side panel slides open and shut (tabs-md slidePanel) through widths down to 1px; Herdr's
+    # 280px minimum would stop it there and make it vanish in one jump.
+    panel = find(root, "panel")
+    if panel and panel.get("min", 0) > 1:
+        panel["min"] = 1
+    # The Files panel: files-md (Herdr's files, plus sorting by date and riding the panel's slide).
+    files = find(root, "files")
+    if files and files.get("content", {}).get("mod") == "files":
+        files["content"] = {**files["content"], "mod": "files-md"}
 
     work = find(root, "work")
     status = find(root, "status")
