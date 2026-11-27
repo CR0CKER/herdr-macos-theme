@@ -55,7 +55,8 @@ agents under them.
   corners): name, folder, ⌃1–9 shortcut, the space's agents with their status; a click hides that
   card until the pointer leaves.
 - **Moving agents:** press a tab and drag it out of the tab bar (inside the bar it reorders), or
-  drag an Agents-list row or a rail icon, ≥10px; a drop within 250ms of the drag starting is ignored (a sloppy click). The dragged item dims to 40%; a space under the
+  drag an Agents-list row or a rail icon, ≥10px; a drop within 250ms of the drag starting is ignored (a sloppy click). The dragged item dims to 40% and a copy of it (icon, name; raised, shadowed, 29px) follows
+  the pointer 14px right and 12px below, reading "Name → Space" with an accent border over a target; a space under the
   pointer (same machine, not the agent's own) gets a 1px accent outline (rail: an accent ring),
   and a dashed "New space" row ends the Spaces list. Dropping moves the tab there, running, with
   its name; the target space is shown afterwards. A split tab's panes arrive side by side.
@@ -95,6 +96,10 @@ agents under them.
   `live`), `terminal.keep {place:"tab"}` (the tab comes out named after the terminal), then
   `tab.rename` back (`""` if it was unnamed). `run()` returns nothing: find new ids in `panes()`.
   Labels alone (`hc label … herdr.space=…`) don't move a terminal Herdr already shows.
+- The drag's picture is a `Popup` that `tabs-md` alone draws for every drag: it's painted above the
+  whole window, not clipped to the bar. Position the Popup element itself (`absolute().left().top()`);
+  an absolute trigger inside it leaves the Popup in the row layout. Several mods taking turns to
+  draw it flashed at their borders.
 - An element keeps only its last `on_mouse_move`: the space row's drop hover lives inside its
   reorder handler; a second handler silently replaced the first, so no space ever became a target.
 

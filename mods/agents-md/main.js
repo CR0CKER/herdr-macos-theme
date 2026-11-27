@@ -118,6 +118,7 @@ function icon(p, size, color) {
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
 }
 
+
 // Added: drag an agent's row onto a space in the Spaces list to move its tab there (spaces-md
 // does the move). See spaces-md "agent.drag".
 const DRAG_PX = 10, DRAG_CLEAR_MS = 300;
@@ -269,7 +270,8 @@ export default class Agents extends View {
     const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === src.tab));
     if (!s) return;
     src.started = true; src.at = Date.now();
-    setShared("agent.drag", { tab: src.tab, space: s.id, machine: s.machine ?? null, source: "agents", at: src.at });
+    setShared("agent.drag", { tab: src.tab, space: s.id, machine: s.machine ?? null, source: "agents", at: src.at,
+      label: src.label, icon: src.program?.icon ?? null, tint: Boolean(src.program?.tint) });
     cx.notify();
   }
 
@@ -435,7 +437,7 @@ export default class Agents extends View {
         })
         .on_click(() => { if (Date.now() - (this.dragJustEnded ?? 0) > 200) run("pane.focus", { pane: a.pane }); })
         // Added: press and drag the row onto another space to move the agent there.
-        .on_mouse_down("left", (e) => { if (a.pane) this.dragSrc = { tab: a.tab, x: e.position.x, y: e.position.y, started: false }; })
+        .on_mouse_down("left", (e) => { if (a.pane) this.dragSrc = { tab: a.tab, x: e.position.x, y: e.position.y, started: false, label: name, program: a.program }; })
         .when(this.dragSrc?.started && this.dragSrc.tab === a.tab, (el) => el.opacity(0.4))
         .when(Boolean(pic), el => el.child(div().id(`agent-fold-${a.address}`)
           .when(subs.length > 0, el => el.on_click((_e, cx) => {

@@ -140,10 +140,11 @@ const DRAG_CLEAR_MS = 300; // the source clears the drag this long after release
 const dragNow = () => { const d = shared("agent.drag"); return d && typeof d.tab === "string" ? d : null; };
 const canDrop = (d, w) => Boolean(d) && w.id !== d.space && (w.machine ?? null) === (d.machine ?? null);
 const inside = (p, b) => Boolean(p && b) && p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height;
-function dragPayload(tab, source) {
+function dragPayload(tab, source, label = "", program = null) {
   const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === tab));
-  return s ? { tab, space: s.id, machine: s.machine ?? null, source, at: Date.now() } : null;
+  return s ? { tab, space: s.id, machine: s.machine ?? null, source, at: Date.now(), label, icon: program?.icon ?? null, tint: Boolean(program?.tint) } : null;
 }
+
 // Polls `test` every 50 ms until it's true or `ms` have passed.
 async function until(cx, test, ms = 3000) {
   for (const end = Date.now() + ms; Date.now() < end; await cx.sleep(50)) if (test()) return true;
@@ -540,7 +541,7 @@ export default class Spaces extends View {
   dropHover(target, e, cx) {
     if (!dragNow()) return;
     this.dropBounds = e.bounds;
-    if (this.dropOver !== target) { this.dropOver = target; cx.notify(); }
+    if (this.dropOver !== target) { this.dropOver = target; this.shareTarget(target); cx.notify(); }
   }
 
   // Added: window-wide pointer moves: start a drag from a rail icon, forget a target the pointer left.
@@ -549,11 +550,17 @@ export default class Spaces extends View {
     if (src) {
       if (e.pressed_button !== "left") { this.dragSrc = null; if (src.started) this.dragClear(src, cx); }
       else if (!src.started && Math.hypot(e.position.x - src.x, e.position.y - src.y) >= DRAG_PX) {
-        const d = dragPayload(src.tab, "rail");
+        const d = dragPayload(src.tab, "rail", src.label, src.program);
         if (d) { src.started = true; src.at = d.at; setShared("agent.drag", d); cx.notify(); }
       }
     }
-    if (this.dropOver && !inside(e.position, this.dropBounds)) { this.dropOver = null; cx.notify(); }
+    if (this.dropOver && !inside(e.position, this.dropBounds)) { this.dropOver = null; this.shareTarget(null); cx.notify(); }
+  }
+
+  // Added: tells the drag's picture (drawn by the source) where it would land.
+  shareTarget(target) {
+    const name = target === "new" ? "New space" : spaces().find((s) => s.id === target)?.name;
+    setShared("agent.dropTarget", target ? { id: target, name: name ?? "" } : null);
   }
 
   dragClear(src, cx) {
@@ -564,6 +571,7 @@ export default class Spaces extends View {
   dragEnd(cx) {
     const d = dragNow(), target = this.dropOver;
     this.dropOver = null;
+    if (target) this.shareTarget(null);
     const src = this.dragSrc;
     this.dragSrc = null;
     if (src?.started) { this.dragClear(src, cx); this.dragJustEnded = Date.now(); }
@@ -819,7 +827,7 @@ export default class Spaces extends View {
         run("pane.focus", { pane: a.pane }); this.quietCard(`agent-card-${a.address}`, cx);
       })
       // Added: drag the icon onto another space to move the agent's tab there.
-      .on_mouse_down("left", (e) => { this.dragSrc = { tab: a.tab, x: e.position.x, y: e.position.y, started: false }; })
+      .on_mouse_down("left", (e) => { this.dragSrc = { tab: a.tab, x: e.position.x, y: e.position.y, started: false, label: agentName(a), program: a.program }; })
       .when(this.dragSrc?.started && this.dragSrc.tab === a.tab, (el) => el.opacity(0.4))
       .child(programIcon(a.program, AGENT_ICON, t.foreground) ?? div().text_color(t.muted).child(String(agentName(a))[0] ?? "?"))
       .child(h_flex().absolute().bottom(0).right(0).min_w(15).h(15).px(1).rounded(8).bg(t.chrome)

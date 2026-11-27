@@ -44,7 +44,7 @@ keeps its name. You can drag:
 - a **row** in the Agents list;
 - an **agent icon** on the folded rail.
 
-While you drag, the space under the pointer is outlined in blue, and a **New space** row appears at
+While you drag, a copy of the tab follows the pointer, the space under it is outlined in blue, and a **New space** row appears at
 the end of the list: drop there to give the agent a space of its own (named after its folder).
 Moves stay on one machine. A tab split into several panes arrives with its panes side by side.
 

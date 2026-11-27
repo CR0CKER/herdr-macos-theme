@@ -1,5 +1,5 @@
 import { View, div, svg, image } from "gpui-kit";
-import { h_flex, ScrollHandle } from "gpui-base";
+import { h_flex, ScrollHandle, Popup } from "gpui-base";
 import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, nextCommand, checking, props, setShared, focused, appHome, readTextFile, watchFolder } from "herdr";
 
 
@@ -99,6 +99,29 @@ function runButton(b) {
 // Added: drag a tab out of the bar onto a space in the sidebar to move it there (spaces-md does
 // the move). While the drag stays in the bar it's still a reorder. See spaces-md "agent.drag".
 const DRAG_PX = 10, DRAG_CLEAR_MS = 300;
+
+// Added: the dragged agent's picture follows the pointer, whatever the drag started from (this tab
+// bar, the Agents list, the rail). This bar draws it for the whole drag: a Popup is painted above
+// the whole window, not clipped to this bar, so one picture can cross the sidebar without a
+// handover (two mods taking turns flashed at their border). It sits just below and right of the
+// pointer, so the pointer stays over the space it's dropped on; "→ Space" once one is targeted.
+const GHOST_ICONS = { "icons/claude.svg": "mods/spaces-md/icons/claude.svg" };
+function dragGhost(t, at) {
+  const d = shared("agent.drag"), target = shared("agent.dropTarget");
+  if (!d || !at) return null;
+  const pic = !d.icon ? null : GHOST_ICONS[d.icon] ? image(GHOST_ICONS[d.icon]).size(14) : d.tint ? svg(d.icon).size(14).text_color(t.muted) : image(d.icon).size(14);
+  const pill = h_flex().h(29).px(10).gap(7).items_center().rounded(7).text_size(12.8)
+    .bg(t.raised).border_1().border_color(target ? t.accent : t.border).shadow_lg().text_color(t.foreground).opacity(0.95)
+    .when(Boolean(pic), (el) => el.child(pic))
+    .child(div().max_w(170).truncate().child(d.label || "Agent"))
+    .when(Boolean(target?.name), (el) => el.child(div().max_w(140).truncate().text_color(t.accent).child(`→ ${target.name}`)));
+  // The Popup element itself is placed at the pointer (it would otherwise sit in the row layout).
+  return Popup.new("agent-drag-ghost", div().size(1)).absolute().left(at.x + 14).top(at.y + 12).anchor("top_left").content(pill);
+}
+// Where to draw it: the pointer's spot against this bar while a drag is on, else null.
+function ghostSpot(e) {
+  return shared("agent.drag") && e.pressed_button === "left" ? e.local_position : null;
+}
 
 export default class Tabs extends View {
   init(_props, cx) {
@@ -215,7 +238,7 @@ export default class Tabs extends View {
         .hover(s => s.bg(t.hover))
         .on_mouse_down("left", (e, cx) => {
           cx.stop_propagation(); this.pressed = i;
-          this.dragSrc = { tab: c.id, x: e.position.x, y: e.position.y, started: false }; // Added
+          this.dragSrc = { tab: c.id, x: e.position.x, y: e.position.y, started: false, label: name, program }; // Added
           if (e.click_count === 2) run("tab.rename", { id: c.id });
         })
         .when(this.dragSrc?.started && this.dragSrc.tab === c.id, (el) => el.opacity(0.4)) // Added: being moved
@@ -253,8 +276,12 @@ export default class Tabs extends View {
     // On the card (props.surface) the bar has no fill of its own, so the card's rounded corners show.
     return h_flex().size_full().min_w(0).px(10).pl(lightsPadding).gap(3).items_center().when(!props()?.surface, el => el.bg(bar)).border_b(1).border_color(t.border)
       .on_mouse_up("left", () => { this.pressed = null; })
+      .relative() // Added: the drag ghost's spot is placed against the bar
+      .when(Boolean(this.ghostAt && shared("agent.drag")), (el) => el.child(dragGhost(t, this.ghostAt)))
       // Added: a tab pressed and dragged out of the bar becomes an agent drag ("agent.drag").
       .on_window_mouse_move((e, cx) => {
+        const at = ghostSpot(e); // Added: the drag's picture follows
+        if (at || this.ghostAt) { this.ghostAt = at; cx.notify(); }
         const src = this.dragSrc;
         if (!src) return;
         if (e.pressed_button !== "left") { this.dragSrc = null; if (src.started) this.dragClear(src, cx); cx.notify(); return; }
@@ -263,11 +290,13 @@ export default class Tabs extends View {
           const s = spaces().find((x) => (x.tabs ?? []).some((c) => c.id === src.tab));
           if (!s) return;
           src.started = true; src.at = Date.now(); this.pressed = null;
-          setShared("agent.drag", { tab: src.tab, space: s.id, machine: s.machine ?? null, source: "tabs", at: src.at });
+          setShared("agent.drag", { tab: src.tab, space: s.id, machine: s.machine ?? null, source: "tabs", at: src.at,
+            label: src.label, icon: src.program?.icon ?? null, tint: Boolean(src.program?.tint) });
           cx.notify();
         }
       })
       .on_window_mouse_up("left", (_e, cx) => {
+        if (this.ghostAt) { this.ghostAt = null; cx.notify(); }
         const src = this.dragSrc;
         if (!src) return;
         cx.timer.after(0, (cx) => { if (this.dragSrc === src) this.dragSrc = null; cx.notify(); });
