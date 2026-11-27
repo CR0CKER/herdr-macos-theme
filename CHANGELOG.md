@@ -53,6 +53,6 @@ All on 26–27 November 2026, herdr-app 0.1.18. Newest last.
 - Keys apply only in the macOS layout (`layout:macos` in `keys.json`); other layouts keep Herdr's
   Cmd+B.
 - Apache License 2.0.
-- Screenshots removed; the repository carries no pictures.
+- Screenshots: `preview.png` (light, shown at herdr.dev/layouts) and `preview-dark.png`.
 - Extra tab bar buttons: `tabs-md` shows buttons for other mods listed in the user's own
   `tab-buttons.json`, so personal buttons live in their own mod and survive reinstalling the theme.

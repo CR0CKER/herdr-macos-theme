@@ -6,6 +6,8 @@ hairline edge, Apple's system blue, SF Pro for the interface and Menlo in the te
 dark following the system. The sidebar folds to a rail of large space badges with each space's
 agents under them.
 
+![macOS](preview.png)
+
 ## What you see
 
 - **Window:** no title bar; the macOS traffic lights sit in the sidebar's top row at (12, 16).
